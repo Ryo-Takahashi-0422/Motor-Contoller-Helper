@@ -177,8 +177,14 @@ class _BluetoothHomePageState extends State<BluetoothHomePage> {
   @override
   void initState() {
     super.initState();
-    requestBluetoothPermissions();
-    _initBluetooth();
+    //requestBluetoothPermissions();
+    //_initBluetooth();
+    _initAsync();
+  }
+
+  Future<void> _initAsync() async {
+    await requestBluetoothPermissions();
+    await _initBluetooth();
   }
 
   Future<void> _initBluetooth() async {
@@ -255,8 +261,8 @@ class _SpeedSliderWithSendButtonState extends State<SpeedSliderWithSendButton> {
           },
         ),
         ElevatedButton(
-          onPressed: _canSend
-              ? () {
+          onPressed: _canSend? ()
+          {
             widget.onSend(_value); // 送信処理を呼び出す
 
             setState(() {
@@ -264,9 +270,9 @@ class _SpeedSliderWithSendButtonState extends State<SpeedSliderWithSendButton> {
             });
 
             Future.delayed(const Duration(milliseconds: 1000), () {
-              if (mounted) {
+              if (mounted) { // mountedとはStateクラスのプロパティ：このStateがまた画面上(Widgetツリー)に存在するかどうか
                 setState(() {
-                  _canSend = true; // 0.5秒後に再び有効
+                  _canSend = true; // 1秒後に再び有効
                 });
               }
             });
@@ -466,11 +472,6 @@ class _BluetoothChatPageState extends State<BluetoothChatPage> {
             )
           else
             Expanded(
-              // flex: 3,
-              // child: ListView(
-              //   children:
-              //   _messages.map((msg) => ListTile(title: Text(msg))).toList(),
-              // ),
               flex: 3,
               child: ListView.builder(
                 controller: _scrollController,
@@ -482,23 +483,14 @@ class _BluetoothChatPageState extends State<BluetoothChatPage> {
             ),
             Expanded(
               flex: 1,
-              // child: Slider(
-              //   value: _value,
-              //   min: 0,
-              //   max: 100,
-              //   divisions: 100,
-              //   label: _value.round().toString(),
-              //   onChanged: (double newValue) {
-              //     setState(() {
-              //       _value = newValue;
-              //     });
-              //   },
-              // ),
               child: SpeedSliderWithSendButton(
                 onSend: (value) {
                   if (_isConnected && _connection != null) {
+                    final msg = "spd,${value.round()}\r\n";
+                    debugPrint("送信データ: $msg (${msg.codeUnits})"); // 各
                     _connection!.output.add(
-                      Uint8List.fromList(utf8.encode("${value.round()}\r\n")),
+                      //Uint8List.fromList(utf8.encode("spd,${value.round()}\r\n")),
+                      Uint8List.fromList(utf8.encode(msg)),
                     );
                     setState(() {
                       _messages.add("速度送信: ${value.round()}");

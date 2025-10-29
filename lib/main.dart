@@ -487,13 +487,11 @@ class _BluetoothChatPageState extends State<BluetoothChatPage> {
                 onSend: (value) {
                   if (_isConnected && _connection != null) {
                     final msg = "spd,${value.round()}\r\n";
-                    debugPrint("送信データ: $msg (${msg.codeUnits})"); // 各
-                    _connection!.output.add(
-                      //Uint8List.fromList(utf8.encode("spd,${value.round()}\r\n")),
-                      Uint8List.fromList(utf8.encode(msg)),
-                    );
+                    //print("送信データ: $msg (${msg.codeUnits})");
+                    _connection!.output.add(Uint8List.fromList(utf8.encode(msg)));
+
                     setState(() {
-                      _messages.add("速度送信: ${value.round()}");
+                      _messages.add("spd: ${value.round()}");
                     });
                   }
                 },

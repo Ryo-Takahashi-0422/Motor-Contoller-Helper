@@ -243,6 +243,16 @@ class _SpeedSliderWithSendButtonState extends State<SpeedSliderWithSendButton> {
   double _value = 0;
   bool _canSend = true;
 
+  // 外部から値を更新する関数
+  void updateValue(String decimalStr) {
+    final values = decimalStr.split(',').map((s) => double.tryParse(s) ?? 0).toList();
+    if (values.isNotEmpty && mounted) {
+      setState(() {
+        _value = values[0];
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -285,6 +295,12 @@ class _SpeedSliderWithSendButtonState extends State<SpeedSliderWithSendButton> {
   }
 }
 
+class CommandTask {
+  final String command;        // 送信コマンド文字列
+  final String nextCommand;    // ACK後に送信する次のコマンド
+  final void Function(String)? onResponse;  // 返信ハンドラ
+  CommandTask(this.command, this.nextCommand, {this.onResponse});
+}
 
 // BluetoothChatPage は BluetoothHomePageでデバイスを選択したあとに遷移する「通信画面」
 // つまり、アプリの第2の画面として main() からの流れに続く重要な一部
@@ -300,87 +316,308 @@ class BluetoothChatPage extends StatefulWidget {
 
 }
 
+// class _BluetoothChatPageState extends State<BluetoothChatPage> {
+//   BluetoothConnection? _connection;
+//   bool _isConnecting = true;
+//   bool _isConnected = false;
+//   bool isWaitingResponse = false;
+//   CommandTask? currentTask;  // 現在実行中のコマンド
+//   String nextMsg = "";
+//   TextEditingController _textController = TextEditingController();
+//   List<String> _messages = [];
+//   double _value = 0;
+//
+//
+//   // ステップ2. 初期処理（initState()）
+//   // ウィジェットが「画面に追加された直後」に呼ばれる。
+//   // 通常、初期化処理（非同期処理、イベントリスナー登録など）をここでやる。
+//   // 毎フレーム呼ばれるわけではなく、一度だけ呼ばれる。
+//   @override
+//   void initState() {
+//     super.initState();
+//     // Bluetooth接続処理を開始
+//     _connectToDevice();
+//   }
+//
+//   // 接続処理
+//   Future<void> _connectToDevice() async {
+//     try {
+//       // Bluetoothに接続
+//       BluetoothConnection connection =
+//       await BluetoothConnection.toAddress(widget.device.address);
+//
+//       setState(() {
+//         _connection = connection;
+//         _isConnecting = false;
+//         _isConnected = true;
+//       });
+//
+//       // バイト列用のバッファ
+//       List<int> _bufferBytes = [];
+//
+//       _connection!.input?.listen((Uint8List data) {
+//         // バイト列をそのままバッファに追加
+//         _bufferBytes.addAll(data);
+//
+//         int index;
+//         // 改行 (0x0A) で区切りながら処理
+//         while ((index = _bufferBytes.indexOf(0x0A)) != -1) {
+//           final completeMessageBytes = _bufferBytes.sublist(0, index);
+//           _bufferBytes = _bufferBytes.sublist(index + 1); // 残りを保存
+//
+//           // 表示用に文字列化（必要な場合のみ）
+//           final completeMessage = String.fromCharCodes(completeMessageBytes);
+//
+//           setState(() {
+//             _messages.add("受信: $completeMessage");
+//           });
+//
+//           // ---- 返信処理 ----
+//           if (isWaitingResponse && completeMessage == "ACK") {
+//             // ACK受信 → 次コマンド送信
+//             if (currentTask?.nextCommand.isNotEmpty ?? false) {
+//               _connection!.output.add(Uint8List.fromList(
+//                   utf8.encode(currentTask!.nextCommand)));
+//               setState(() {
+//                 _messages.add("送信: ${currentTask!.nextCommand}");
+//               });
+//             }
+//             // isWaitingResponse = false; // 必要に応じてリセット
+//           } else if (isWaitingResponse && completeMessage != "ACK") {
+//             // データ応答がある場合
+//
+//             // completeMessageBytes は Uint8List または List<int> で受信済み
+//             // 10進数の文字列リストに変換
+//             final decimalList = completeMessageBytes.map((b) => b.toString()).toList();
+//             final decimalStr = decimalList.join(','); // 必要に応じてカンマ区切りに
+//
+//             // コールバックに 10進数文字列で渡す
+//             //currentTask?.onResponse?.call(decimalStr);
+//             currentTask?.onResponse = (decimalStr) {
+//               // スライダーに反映
+//               _speedSliderKey.currentState?.updateValue(decimalStr);
+//             };
+//
+//             isWaitingResponse = false;
+//           }
+//
+//           // スクロール処理
+//           WidgetsBinding.instance.addPostFrameCallback((_) {
+//             if (_scrollController.hasClients) {
+//               _scrollController.animateTo(
+//                 _scrollController.position.maxScrollExtent,
+//                 duration: const Duration(milliseconds: 300),
+//                 curve: Curves.easeOut,
+//               );
+//             }
+//           });
+//         }
+//       });
+//
+//       // ==== 初期化時に red コマンド送信 ====
+//       if (_isConnected && _connection != null) {
+//         currentTask = CommandTask(
+//           "red,0000\r\n",  // コマンド
+//           ",1\r\n",        // ACK後の次コマンド
+//           onResponse: (resp) {
+//             setState(() {
+//               _messages.add("redコマンドの返信: $resp");
+//             });
+//           },
+//         );
+//
+//         _connection!.output
+//             .add(Uint8List.fromList(utf8.encode(currentTask!.command)));
+//         isWaitingResponse = true;
+//
+//         setState(() {
+//           _messages.add("送信: ${currentTask!.command}");
+//         });
+//       }
+//     }
+//     catch (e) {
+//       print('接続エラー: $e');
+//       setState(() {
+//         _isConnecting = false;
+//         _isConnected = false;
+//       });
+//     }
+//   }
+//
+//   final ScrollController _scrollController = ScrollController();
+//
+//   // ステップ5. メッセージ送信処理
+//   void _sendMessage(String text) {
+//     if (_connection != null && _isConnected) {
+//       _connection!.output.add(Uint8List.fromList(utf8.encode("$text\r\n")));
+//       setState(() {
+//         _messages.add("送信: $text");
+//       });
+//       _textController.clear();
+//
+//     }
+//   }
+//
+//   // 画面を閉じたとき自動で呼ばれる
+//   @override
+//   void dispose() {
+//     _connection?.dispose();
+//     _connection = null;
+//     super.dispose();
+//   }
+//
+//   // ステップ6. 画面構築（build()）
+//   // 接続中 → ローディング表示
+//   // 接続済み → メッセージ一覧 + 送信欄
+//   // 接続失敗 → エラーメッセージ表示
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     final deviceName = widget.device.name ?? "Unknown";
+//
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: Text("通信中: $deviceName"),
+//       ),
+//       body: Column(
+//         children: [
+//           if (_isConnecting)
+//             const Padding(
+//               padding: EdgeInsets.all(16),
+//               child: CircularProgressIndicator(),
+//             )
+//           else if (!_isConnected)
+//             const Padding(
+//               padding: EdgeInsets.all(16),
+//               child: Text("接続できませんでした"),
+//             )
+//           else
+//             Expanded(
+//               flex: 3,
+//               child: ListView.builder(
+//                 controller: _scrollController,
+//                 itemCount: _messages.length,
+//                 itemBuilder: (context, index) {
+//                   return ListTile(title: Text(_messages[index]));
+//                 },
+//               )
+//             ),
+//             Expanded(
+//               flex: 1,
+//               child: SpeedSliderWithSendButton(
+//                 onSend: (value) {
+//                   if (_isConnected && _connection != null) {
+//                     final msg = "spd,${value.round()}\r\n";
+//                     //print("送信データ: $msg (${msg.codeUnits})");
+//                     _connection!.output.add(Uint8List.fromList(utf8.encode(msg)));
+//
+//                     setState(() {
+//                       _messages.add("spd: ${value.round()}");
+//                     });
+//                   }
+//                 },
+//               ),
+//             ),
+//           if (_isConnected)
+//             Padding(
+//               padding: const EdgeInsets.symmetric(horizontal: 8.0),
+//               child: Row(
+//                 children: [
+//                   Expanded(
+//                     child: TextField(controller: _textController),
+//                   ),
+//                   IconButton(
+//                     icon: const Icon(Icons.send),
+//                     onPressed: () {
+//                       if (_textController.text.trim().isNotEmpty) {
+//                         _sendMessage(_textController.text.trim());
+//                       }
+//                     },
+//                   ),
+//                 ],
+//               ),
+//             ),
+//         ],
+//       ),
+//     );
+//   }
+// }
+
 class _BluetoothChatPageState extends State<BluetoothChatPage> {
   BluetoothConnection? _connection;
   bool _isConnecting = true;
   bool _isConnected = false;
+  bool isWaitingResponse = false;
+  CommandTask? currentTask;  // 現在実行中のコマンド
+  String nextMsg = "";
   TextEditingController _textController = TextEditingController();
   List<String> _messages = [];
+
+  // スライダー値
   double _value = 0;
 
-  // ステップ2. 初期処理（initState()）
-  // ウィジェットが「画面に追加された直後」に呼ばれる。
-  // 通常、初期化処理（非同期処理、イベントリスナー登録など）をここでやる。
-  // 毎フレーム呼ばれるわけではなく、一度だけ呼ばれる。
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
-    // Bluetooth接続処理を開始
     _connectToDevice();
   }
 
-  // 接続処理
   Future<void> _connectToDevice() async {
     try {
-      // ステップ3. Bluetoothに接続（非同期）
-      // 指定されたアドレスにBluetoothで接続
-      // 成功したら _connection.input.listen(...) で受信を監視開始
       BluetoothConnection connection =
       await BluetoothConnection.toAddress(widget.device.address);
+
       setState(() {
         _connection = connection;
         _isConnecting = false;
         _isConnected = true;
       });
 
-      // ステップ4. メッセージ受信処理（listen）
-      // データを受け取るたびに ListView に表示される（setState()）
-      // _connection!.input?.listen((Uint8List data) {
-      //   final incomingText = utf8.decode(data);
-      //   setState(() {
-      //     _messages.add("受信: $incomingText");
-      //   });
-      // }).onDone(() {
-      //   setState(() {
-      //     _isConnected = false;
-      //   });
-      // });
+      // バイト列バッファ
+      List<int> _bufferBytes = [];
 
-      String _buffer = "";
-
-      // listen(...) は Dart の ストリーム（Stream） に対する処理。一度だけ登録している。
-      // ストリーム は「非同期に何回も値を届ける」もの
-      // たとえば Bluetooth、WebSocket、センサー、タイマーなどがデータをストリームで送ってくる
-      // .listen(...) は「新しいデータが来たらこの関数を実行する」と登録するメソッド
-      // _connection は null ではないと仮定し、その input が存在すれば（nullでなければ：null安全）.listen(...) を呼び出す
-      // _connection!.input?.listen((Uint8List data) {
-      //   final incomingText = utf8.decode(data);
-      //   _buffer += incomingText;
-      //
-      //   // 区切り文字（ここでは \n）で分割する
-      //   while (_buffer.contains("\n")) {
-      //     final index = _buffer.indexOf("\n");
-      //     final completeMessage = _buffer.substring(0, index);
-      //     _buffer = _buffer.substring(index + 1); // 残りのバッファを保存
-      //     setState(() {
-      //       _messages.add("受信: $completeMessage");
-      //     });
-      //   }
-      // });
       _connection!.input?.listen((Uint8List data) {
-        final incomingText = utf8.decode(data);
-        _buffer += incomingText;
+        _bufferBytes.addAll(data);
 
-        while (_buffer.contains("\n")) {
-          final index = _buffer.indexOf("\n");
-          final completeMessage = _buffer.substring(0, index);
-          _buffer = _buffer.substring(index + 1);
+        int index;
+        while ((index = _bufferBytes.indexOf(0x0A)) != -1) { // 改行区切り
+          final completeMessageBytes = _bufferBytes.sublist(0, index);
+          _bufferBytes = _bufferBytes.sublist(index + 1);
+
+          final completeMessage = String.fromCharCodes(completeMessageBytes);
 
           setState(() {
             _messages.add("受信: $completeMessage");
           });
 
-          // 少し遅らせてスクロール（build 完了後にスクロール）
+          // ---- 返信処理 ----
+          if (isWaitingResponse && completeMessage == "ACK") {
+            if (currentTask?.nextCommand.isNotEmpty ?? false) {
+              _connection!.output.add(Uint8List.fromList(
+                  utf8.encode(currentTask!.nextCommand)));
+              setState(() {
+                final cleanCmd = currentTask!.command.replaceAll(RegExp(r'[\r\n]+'), '');
+                _messages.add("送信: $cleanCmd");
+              });
+            }
+          } else if (isWaitingResponse && completeMessage != "ACK") {
+            // データ応答がある場合（10進数変換してスライダー反映）
+            final decimalList = completeMessageBytes.map((b) => b.toDouble()).toList();
+            if (decimalList.isNotEmpty) {
+              setState(() {
+                _value = decimalList[0]; // 最初の値をスライダーに反映
+              });
+            }
+
+            // 任意のコールバックも呼ぶ
+            currentTask?.onResponse?.call(decimalList.join(','));
+
+            isWaitingResponse = false;
+          }
+
+          // スクロール処理
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_scrollController.hasClients) {
               _scrollController.animateTo(
@@ -393,7 +630,30 @@ class _BluetoothChatPageState extends State<BluetoothChatPage> {
         }
       });
 
+      // 初期化時に red コマンド送信
+      if (_isConnected && _connection != null) {
+        currentTask = CommandTask(
+          "red,0000\r\n",
+          ",1\r\n",
+          onResponse: (resp) {
+            // 改行(\r, \n)を削除
+            final cleanResp = resp.replaceAll(RegExp(r'[\r\n]+'), '');
 
+            setState(() {
+              _messages.add("redコマンドの返信: $cleanResp");
+            });
+          },
+        );
+
+        _connection!.output
+            .add(Uint8List.fromList(utf8.encode(currentTask!.command)));
+        isWaitingResponse = true;
+
+        setState(() {
+          final cleanCmd = currentTask!.command.replaceAll(RegExp(r'[\r\n]+'), '');
+          _messages.add("送信: $cleanCmd");
+        });
+      }
     } catch (e) {
       print('接続エラー: $e');
       setState(() {
@@ -403,19 +663,6 @@ class _BluetoothChatPageState extends State<BluetoothChatPage> {
     }
   }
 
-  final ScrollController _scrollController = ScrollController();
-
-  // // ステップ5. メッセージ送信処理
-  // void _sendMessage(String text) {
-  //   if (_connection != null && _isConnected) {
-  //     // ステップ5. メッセージ送信処理
-  //     _connection!.output.add(Uint8List.fromList(utf8.encode("$text\r\n")));
-  //     setState(() {
-  //       _messages.add("送信: $text");
-  //     });
-  //     _textController.clear();
-  //   }
-  // }
   void _sendMessage(String text) {
     if (_connection != null && _isConnected) {
       _connection!.output.add(Uint8List.fromList(utf8.encode("$text\r\n")));
@@ -423,32 +670,15 @@ class _BluetoothChatPageState extends State<BluetoothChatPage> {
         _messages.add("送信: $text");
       });
       _textController.clear();
-
-      // メッセージ追加後にスクロール
-      // Future.delayed(Duration(milliseconds: 100), () {
-      //   if (_scrollController.hasClients) {
-      //     _scrollController.animateTo(
-      //       _scrollController.position.maxScrollExtent,
-      //       duration: Duration(milliseconds: 300),
-      //       curve: Curves.easeOut,
-      //     );
-      //   }
-      // });
     }
   }
 
-  // 画面を閉じたとき自動で呼ばれる
   @override
   void dispose() {
     _connection?.dispose();
     _connection = null;
     super.dispose();
   }
-
-  // ステップ6. 画面構築（build()）
-  // 接続中 → ローディング表示
-  // 接続済み → メッセージ一覧 + 送信欄
-  // 接続失敗 → エラーメッセージ表示
 
   @override
   Widget build(BuildContext context) {
@@ -479,24 +709,41 @@ class _BluetoothChatPageState extends State<BluetoothChatPage> {
                 itemBuilder: (context, index) {
                   return ListTile(title: Text(_messages[index]));
                 },
-              )
-            ),
-            Expanded(
-              flex: 1,
-              child: SpeedSliderWithSendButton(
-                onSend: (value) {
-                  if (_isConnected && _connection != null) {
-                    final msg = "spd,${value.round()}\r\n";
-                    //print("送信データ: $msg (${msg.codeUnits})");
-                    _connection!.output.add(Uint8List.fromList(utf8.encode(msg)));
-
-                    setState(() {
-                      _messages.add("spd: ${value.round()}");
-                    });
-                  }
-                },
               ),
             ),
+          Expanded(
+            flex: 1,
+            child: Column(
+              children: [
+                Text("速度: ${_value.round()}"),
+                Slider(
+                  value: _value,
+                  min: 0,
+                  max: 100,
+                  divisions: 100,
+                  label: _value.round().toString(),
+                  onChanged: (v) {
+                    setState(() {
+                      _value = v;
+                    });
+                  },
+                ),
+                ElevatedButton(
+                  onPressed: _isConnected
+                      ? () {
+                    final msg = "spd,${_value.round()}\r\n";
+                    _connection!.output.add(
+                        Uint8List.fromList(utf8.encode(msg)));
+                    setState(() {
+                      _messages.add("spd: ${_value.round()}");
+                    });
+                  }
+                      : null,
+                  child: const Text("送信"),
+                ),
+              ],
+            ),
+          ),
           if (_isConnected)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0),

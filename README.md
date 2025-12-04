@@ -4,7 +4,7 @@
 
 ## システム概要
 
-- 本アプリ（Motor Controller Helper）とマイコンをBluetooth(HC-05)でハンドシェイクしUART通信  
+- 本アプリとマイコン(RX62N)をBluetooth(HC-05)でハンドシェイクしUART通信  
   ファームウェアは以下を参照ください。  
   https://github.com/Ryo-Takahashi-0422/Motor-Contoller  
 - マイコンはEEPROM(24LC64)、Bluetooth(HC-05)、モータードライバ(L298N)と接続

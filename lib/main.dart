@@ -316,233 +316,6 @@ class BluetoothChatPage extends StatefulWidget {
 
 }
 
-// class _BluetoothChatPageState extends State<BluetoothChatPage> {
-//   BluetoothConnection? _connection;
-//   bool _isConnecting = true;
-//   bool _isConnected = false;
-//   bool isWaitingResponse = false;
-//   CommandTask? currentTask;  // 現在実行中のコマンド
-//   String nextMsg = "";
-//   TextEditingController _textController = TextEditingController();
-//   List<String> _messages = [];
-//   double _value = 0;
-//
-//
-//   // ステップ2. 初期処理（initState()）
-//   // ウィジェットが「画面に追加された直後」に呼ばれる。
-//   // 通常、初期化処理（非同期処理、イベントリスナー登録など）をここでやる。
-//   // 毎フレーム呼ばれるわけではなく、一度だけ呼ばれる。
-//   @override
-//   void initState() {
-//     super.initState();
-//     // Bluetooth接続処理を開始
-//     _connectToDevice();
-//   }
-//
-//   // 接続処理
-//   Future<void> _connectToDevice() async {
-//     try {
-//       // Bluetoothに接続
-//       BluetoothConnection connection =
-//       await BluetoothConnection.toAddress(widget.device.address);
-//
-//       setState(() {
-//         _connection = connection;
-//         _isConnecting = false;
-//         _isConnected = true;
-//       });
-//
-//       // バイト列用のバッファ
-//       List<int> _bufferBytes = [];
-//
-//       _connection!.input?.listen((Uint8List data) {
-//         // バイト列をそのままバッファに追加
-//         _bufferBytes.addAll(data);
-//
-//         int index;
-//         // 改行 (0x0A) で区切りながら処理
-//         while ((index = _bufferBytes.indexOf(0x0A)) != -1) {
-//           final completeMessageBytes = _bufferBytes.sublist(0, index);
-//           _bufferBytes = _bufferBytes.sublist(index + 1); // 残りを保存
-//
-//           // 表示用に文字列化（必要な場合のみ）
-//           final completeMessage = String.fromCharCodes(completeMessageBytes);
-//
-//           setState(() {
-//             _messages.add("受信: $completeMessage");
-//           });
-//
-//           // ---- 返信処理 ----
-//           if (isWaitingResponse && completeMessage == "ACK") {
-//             // ACK受信 → 次コマンド送信
-//             if (currentTask?.nextCommand.isNotEmpty ?? false) {
-//               _connection!.output.add(Uint8List.fromList(
-//                   utf8.encode(currentTask!.nextCommand)));
-//               setState(() {
-//                 _messages.add("送信: ${currentTask!.nextCommand}");
-//               });
-//             }
-//             // isWaitingResponse = false; // 必要に応じてリセット
-//           } else if (isWaitingResponse && completeMessage != "ACK") {
-//             // データ応答がある場合
-//
-//             // completeMessageBytes は Uint8List または List<int> で受信済み
-//             // 10進数の文字列リストに変換
-//             final decimalList = completeMessageBytes.map((b) => b.toString()).toList();
-//             final decimalStr = decimalList.join(','); // 必要に応じてカンマ区切りに
-//
-//             // コールバックに 10進数文字列で渡す
-//             //currentTask?.onResponse?.call(decimalStr);
-//             currentTask?.onResponse = (decimalStr) {
-//               // スライダーに反映
-//               _speedSliderKey.currentState?.updateValue(decimalStr);
-//             };
-//
-//             isWaitingResponse = false;
-//           }
-//
-//           // スクロール処理
-//           WidgetsBinding.instance.addPostFrameCallback((_) {
-//             if (_scrollController.hasClients) {
-//               _scrollController.animateTo(
-//                 _scrollController.position.maxScrollExtent,
-//                 duration: const Duration(milliseconds: 300),
-//                 curve: Curves.easeOut,
-//               );
-//             }
-//           });
-//         }
-//       });
-//
-//       // ==== 初期化時に red コマンド送信 ====
-//       if (_isConnected && _connection != null) {
-//         currentTask = CommandTask(
-//           "red,0000\r\n",  // コマンド
-//           ",1\r\n",        // ACK後の次コマンド
-//           onResponse: (resp) {
-//             setState(() {
-//               _messages.add("redコマンドの返信: $resp");
-//             });
-//           },
-//         );
-//
-//         _connection!.output
-//             .add(Uint8List.fromList(utf8.encode(currentTask!.command)));
-//         isWaitingResponse = true;
-//
-//         setState(() {
-//           _messages.add("送信: ${currentTask!.command}");
-//         });
-//       }
-//     }
-//     catch (e) {
-//       print('接続エラー: $e');
-//       setState(() {
-//         _isConnecting = false;
-//         _isConnected = false;
-//       });
-//     }
-//   }
-//
-//   final ScrollController _scrollController = ScrollController();
-//
-//   // ステップ5. メッセージ送信処理
-//   void _sendMessage(String text) {
-//     if (_connection != null && _isConnected) {
-//       _connection!.output.add(Uint8List.fromList(utf8.encode("$text\r\n")));
-//       setState(() {
-//         _messages.add("送信: $text");
-//       });
-//       _textController.clear();
-//
-//     }
-//   }
-//
-//   // 画面を閉じたとき自動で呼ばれる
-//   @override
-//   void dispose() {
-//     _connection?.dispose();
-//     _connection = null;
-//     super.dispose();
-//   }
-//
-//   // ステップ6. 画面構築（build()）
-//   // 接続中 → ローディング表示
-//   // 接続済み → メッセージ一覧 + 送信欄
-//   // 接続失敗 → エラーメッセージ表示
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     final deviceName = widget.device.name ?? "Unknown";
-//
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: Text("通信中: $deviceName"),
-//       ),
-//       body: Column(
-//         children: [
-//           if (_isConnecting)
-//             const Padding(
-//               padding: EdgeInsets.all(16),
-//               child: CircularProgressIndicator(),
-//             )
-//           else if (!_isConnected)
-//             const Padding(
-//               padding: EdgeInsets.all(16),
-//               child: Text("接続できませんでした"),
-//             )
-//           else
-//             Expanded(
-//               flex: 3,
-//               child: ListView.builder(
-//                 controller: _scrollController,
-//                 itemCount: _messages.length,
-//                 itemBuilder: (context, index) {
-//                   return ListTile(title: Text(_messages[index]));
-//                 },
-//               )
-//             ),
-//             Expanded(
-//               flex: 1,
-//               child: SpeedSliderWithSendButton(
-//                 onSend: (value) {
-//                   if (_isConnected && _connection != null) {
-//                     final msg = "spd,${value.round()}\r\n";
-//                     //print("送信データ: $msg (${msg.codeUnits})");
-//                     _connection!.output.add(Uint8List.fromList(utf8.encode(msg)));
-//
-//                     setState(() {
-//                       _messages.add("spd: ${value.round()}");
-//                     });
-//                   }
-//                 },
-//               ),
-//             ),
-//           if (_isConnected)
-//             Padding(
-//               padding: const EdgeInsets.symmetric(horizontal: 8.0),
-//               child: Row(
-//                 children: [
-//                   Expanded(
-//                     child: TextField(controller: _textController),
-//                   ),
-//                   IconButton(
-//                     icon: const Icon(Icons.send),
-//                     onPressed: () {
-//                       if (_textController.text.trim().isNotEmpty) {
-//                         _sendMessage(_textController.text.trim());
-//                       }
-//                     },
-//                   ),
-//                 ],
-//               ),
-//             ),
-//         ],
-//       ),
-//     );
-//   }
-// }
-
 class _BluetoothChatPageState extends State<BluetoothChatPage> {
   BluetoothConnection? _connection;
   bool _isConnecting = true;
@@ -595,14 +368,20 @@ class _BluetoothChatPageState extends State<BluetoothChatPage> {
           // ---- 返信処理 ----
           if (isWaitingResponse && completeMessage == "ACK") {
             if (currentTask?.nextCommand.isNotEmpty ?? false) {
-              _connection!.output.add(Uint8List.fromList(
-                  utf8.encode(currentTask!.nextCommand)));
+              final cmd = currentTask!.nextCommand;
+
+              _connection!.output.add(
+                Uint8List.fromList(utf8.encode(cmd)),
+              );
+
               setState(() {
-                final cleanCmd = currentTask!.command.replaceAll(RegExp(r'[\r\n]+'), '');
+                final cleanCmd = cmd.replaceAll(RegExp(r'[\r\n]+'), '');
                 _messages.add("送信: $cleanCmd");
               });
             }
-          } else if (isWaitingResponse && completeMessage != "ACK") {
+          }
+
+          else if (isWaitingResponse && completeMessage != "ACK") {
             // データ応答がある場合（10進数変換してスライダー反映）
             final decimalList = completeMessageBytes.map((b) => b.toDouble()).toList();
             if (decimalList.isNotEmpty) {
